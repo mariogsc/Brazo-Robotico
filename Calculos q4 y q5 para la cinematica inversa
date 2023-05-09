@@ -1,0 +1,10 @@
+% Calculos para la cinemática inversa
+% Buscamos obtener q4 y q5 en función de q1, q2 y q3
+
+Y=A*B*C;
+Z=D*E;
+W=inv(Y)*T;
+Z=simplify(Z);
+display(Z);
+W = simplify (W); % Simplifica a su mínima expresión la matriz W
+display(W(2,3)); % Muestra el elemento 2,3 de la matriz W
