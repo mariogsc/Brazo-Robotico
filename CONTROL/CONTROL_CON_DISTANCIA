@@ -1,0 +1,63 @@
+#include "Servo.h"
+
+Servo servo;
+const int TRIGGER=2;
+const int ECHO=3;
+
+const float umbral=10.0;
+int tiempo=0;
+int distancia=0;
+
+int angle=0;
+bool aux=false;
+
+int CalculaDistancia();
+void IniciarTrigger();
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(TRIGGER,OUTPUT);
+  pinMode(ECHO,INPUT);
+  digitalWrite(TRIGGER,LOW);
+
+  servo.attach(11);
+  servo.write(angle);  
+
+}
+
+void loop() {
+
+IniciarTrigger();
+
+distancia=CalculaDistancia();
+Serial.println(distancia);
+
+if(distancia>umbral){
+  if(angle==180)aux=true;
+  else if(angle==0)aux=false;
+
+    if(aux==false)angle+=5;
+    else if(aux==true)angle-=5;
+
+    servo.write(angle);
+  delay(100);
+}
+
+}
+
+int CalculaDistancia(){
+
+  int tiempo=pulseIn(ECHO,HIGH);
+  int distancia=tiempo/59;
+
+  return distancia;
+
+}
+
+void IniciarTrigger(){
+  digitalWrite(TRIGGER,HIGH);
+  delayMicroseconds(10);
+
+  digitalWrite(TRIGGER,LOW);
+
+}
