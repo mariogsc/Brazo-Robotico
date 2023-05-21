@@ -1,0 +1,205 @@
+#include <Servo.h>
+
+#define MAX_ERROR 20
+#define MAX_LECTURAS 10
+// Pines para los pulsadores
+#define PinPul1 6
+#define PinPul2 7
+
+// VARIABLES AUXILIARES
+int ValorPulsador1=0;
+int ValorPulsador2=0;
+int i=0;
+float k=0.7;
+
+// CLASE DEL SERVOMOTOR CON PINES, VARIABLES Y FUNCIONES NECESARIAS PARA SU USO
+class Servomotor{
+  // PINES A UTILIZAR
+  int PinPWM;
+  int PinPot1; // Potenciómetro Lazo Cerrado
+  int PinPot2; // Potenciómetro Lazo Abierto
+public:
+  int Angulo;
+  int MaxAngulo, MinAngulo;
+
+  // VARIABLES PARA EL CONTROL EN LAZO ABIERTO
+  int Lecturas[MAX_LECTURAS];
+  int Total;
+  int Promedio;
+
+  // VARIABLES PARA EL CONTROL EN LAZO CERRADO
+  int Error;
+  int AnguloFinal;
+  int Lectura;
+  int MaxPot;
+  int MinPot;
+  int Mapeo1,Mapeo2,Error1;
+
+  Servo servo; // Se pone publico para poder acceder con facilidad a las funciones propias del servomotor
+
+ Servomotor(int PWM, int Pot1,int Pot2, int angle, int min, int max,int MinP,int MaxP){
+    PinPWM = PWM;
+    PinPot1 = Pot1;
+    PinPot2=Pot2;
+    Angulo = angle;
+    MaxAngulo = max;
+    MinAngulo = min;
+    Error=0;
+    AnguloFinal=0;
+    Lectura=0;
+    MinPot=MinP;
+    MaxPot=MaxP;
+
+    for(int i=0; i< MAX_LECTURAS; i++){ //Inicialización del vector.
+      Lecturas[i] = 0;
+    }
+  }
+
+  // FUNCIONES DE INTERFAZ
+  void SetAnguloFinal(int a){AnguloFinal=a;}
+  int GetAnguloFinal(){return AnguloFinal;}
+  int GetError(){return Error;}
+  int GetAngulo(){return Angulo;}
+  void SetPot(int MIN,int MAX){MaxPot=MAX;MinPot=MIN;}
+
+  // FUNCIONES PARA EL MOVIMIENTO DEL SERVOMOTOR
+  void Write(int angle) {
+    if (angle > MaxAngulo)
+      angle = MaxAngulo;
+    else if (angle < MinAngulo)
+      angle = MinAngulo;
+
+    Angulo = angle;
+    servo.write(Angulo);
+  }
+
+  void Attach(){
+    servo.attach(PinPWM);
+  }
+
+  // FUNCIONES PARA EL CONTROL EN LAZO ABIERTO 
+  // Se utiliza un vector de lecturas con el objetivo de filtrar el ruido
+  void LecturasLazoAbierto(){
+    Total=Total-Lecturas[i];
+    Lecturas[i] = analogRead(PinPot2);
+    Total = Total + Lecturas[i];
+    
+  }
+
+  void MueveLazoAbierto(){
+    Promedio = Total / MAX_LECTURAS;
+    Angulo = map(Promedio, 0, 1023, MinAngulo, MaxAngulo);
+    Write(Angulo);
+  }
+
+  // FUNCIONES PARA EL CONTROL EN LAZO CERRADO
+  void inicializaLazoCerrado(){
+    Write(MinAngulo);
+    delay(100);
+    MinPot=analogRead(PinPot1);
+    delay(500);
+    Write((MinAngulo+MaxAngulo)/2);
+    delay(500);
+    Write(MaxAngulo);
+    delay(100);
+    MaxPot=analogRead(PinPot2);
+    delay(500);
+  }
+  void MueveLazoCerrado(){
+    Lectura = analogRead(PinPot1);
+    Mapeo1=map(AnguloFinal,MinAngulo,MaxAngulo,MinPot,MaxPot); // Mapeo de la posicion final (angulo->señal analogica)
+    Error1=(Mapeo1-Lectura); // Error entre el mapeo del angulo final y el valor obtenido de la realimentación
+    Error=map(abs(Error1),MinPot,MaxPot,MinAngulo,MaxAngulo); // Mapeo del error (señala analogica->angulo)
+    if(Error>MAX_ERROR && Error1>0)Angulo=(Angulo+0.7*Error);
+    else if(Error>MAX_ERROR && Error1<0)Angulo=(Angulo-0.7*Error);
+    Write(Angulo);
+    delay(500);
+  }
+};
+
+// CREACIÓN DE LOS SERVOMOTORES
+Servomotor base(8,A3,A0, 0, 0, 180,37,570);
+Servomotor brazo(9,A1,A4,0,40,45,245,265);
+Servomotor antebrazo(10,A5,A2,0,0,180,36,570);
+
+// Estos servomotores solo se utilizaran en su rango de valores maximo y minimo luego no es necesario utilizar ningun lazo de control
+Servomotor rotacion(11,0,0,0,0,180,0,0);
+Servomotor gripper(12,0,0,0,88,165,0,0);
+
+
+void inicializa(){
+  base.Attach(); 
+  brazo.Attach();
+  antebrazo.Attach();
+  gripper.Attach();
+
+// Estas funciones servirian para inicializar los valores de los potenciometros automaticamente
+  //base.inicializaLazoCerrado();
+  //brazo.inicializaLazoCerrado();
+  //antebrazo.inicializaLazoCerrado();
+
+  // Posiciones iniciales
+  base.Write(0);
+  brazo.Write(40);
+  antebrazo.Write(180);
+  gripper.Write(165);
+
+  // Inicializa los valores del lazo cerrado
+  base.SetAnguloFinal(180);
+  antebrazo.SetAnguloFinal(0);
+
+}
+
+// FUCNIONES CON LA LÓGICA DE CONTROL 
+void ControlLazoAbierto(){
+  
+base.LecturasLazoAbierto();
+brazo.LecturasLazoAbierto();
+antebrazo.LecturasLazoAbierto();
+
+  i = i + 1;
+
+  //Calcula el promedio y envía el resultado al servomotor
+  if (i >= 10){
+    i = 0;
+    base.MueveLazoAbierto();
+    brazo.MueveLazoAbierto();
+    antebrazo.MueveLazoAbierto();
+  }
+
+}
+
+
+// FUCNIONES PRINCIPALES
+void setup() {
+  Serial.begin(9600);
+  delay(3000);
+
+  inicializa();
+}
+
+void loop() {
+
+  ValorPulsador1=digitalRead(PinPul1);
+  ValorPulsador2=digitalRead(PinPul2);
+
+    if(ValorPulsador2==HIGH)gripper.Write(80);
+    else gripper.Write(165);
+
+    if(ValorPulsador1==HIGH){
+      ControlLazoAbierto();
+    }
+    else{
+      base.MueveLazoCerrado();
+      delay(500);
+      antebrazo.MueveLazoCerrado();
+      delay(200);
+    }
+  
+  //Serial.print("Base-> ");Serial.print(base.GetAngulo());Serial.print(" Brazo-> ");Serial.print(brazo.GetAngulo());Serial.print(" ABrazo-> ");Serial.println(antebrazo.GetAngulo());
+  //Serial.print("Base-> ");Serial.print(base.GetError());Serial.print(" ABrazo-> ");Serial.println(antebrazo.GetError());
+   //Serial.print("Mapeo1-> ");Serial.print(base.Lectura);Serial.print(" Mapeo1-> ");Serial.print(brazo.Mapeo1);Serial.print(" Error1-> ");Serial.print(base.Error1);Serial.print(" Error-> ");Serial.println(base.Error);
+  delay(200);
+
+
+}
